@@ -17,8 +17,9 @@ One gesture, one meaning: no level escalates into another, so what a swipe will
 do is knowable before you make it.
 
 Three-finger events are swallowed, because macOS would otherwise turn them into
-page navigation, Mission Control, or stray scrolling inside a TUI. Four-finger
-gestures are left alone, so Mission Control and Spaces keep working there.
+page navigation, Mission Control, or stray scrolling inside a TUI. Nothing here
+acts on four fingers, and in practice Mission Control and Spaces keep working:
+macOS reaches those gestures before a session tap does.
 
 Two dependencies, both silent when missing:
   * macOS three-finger gestures must be ON, and three-finger drag must be OFF.
@@ -91,13 +92,29 @@ _in_host = None         # decided once per touch session, see below
 _swallow_until = 0.0
 
 os.makedirs(os.path.dirname(TRACE), exist_ok=True)
-if os.path.exists(TRACE) and os.path.getsize(TRACE) > TRACE_MAX_BYTES:
-    os.replace(TRACE, TRACE + ".1")
 _trace_file = open(TRACE, "a", buffering=1)   # line buffered, opened once
+_trace_bytes = _trace_file.tell()
+_trace_lock = threading.Lock()
 
 
 def trace(msg):
-    _trace_file.write(f"{time.strftime('%H:%M:%S')} [app] {msg}\n")
+    """Append one line, rotating at the cap.
+
+    Rotating only at startup would be a cap in name alone: this daemon is
+    started once and runs for weeks, so the file it actually writes is the one
+    that never gets checked. The size is counted rather than stat()ed so the
+    common path stays a single write.
+    """
+    global _trace_file, _trace_bytes
+    line = f"{time.strftime('%H:%M:%S')} [app] {msg}\n"
+    with _trace_lock:
+        _trace_file.write(line)
+        _trace_bytes += len(line)
+        if _trace_bytes > TRACE_MAX_BYTES:
+            _trace_file.close()
+            os.replace(TRACE, TRACE + ".1")
+            _trace_file = open(TRACE, "a", buffering=1)
+            _trace_bytes = 0
 
 
 def claim_singleton(timeout=5.0):

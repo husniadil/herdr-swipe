@@ -20,8 +20,9 @@ now?* That is what the tap is for.
 One gesture, one meaning. No level escalates into another, so what a swipe will
 do is knowable before you make it.
 
-Two-finger scrolling is untouched. Four-finger gestures are left to macOS, so
-Mission Control and Spaces keep working there.
+Two-finger scrolling is untouched. Nothing here acts on four fingers, and
+Mission Control and Spaces keep working: macOS reaches those gestures before a
+session tap does.
 
 **Panes move in reading order**, left to right and top to bottom, wrapping at
 the ends — not by which pane physically sits in the direction you swiped. So
@@ -85,12 +86,13 @@ this is enforced by the OS, not by the code being careful.
 socket, no telemetry, and no update check.
 
 **The log records gestures, not content.** `~/.local/state/herdr-swipe/trace.log`
-holds lines like `3-finger right -> tab` and the pane it moved to. It caps
-itself at 1 MB. Delete it whenever you like.
+holds lines like `3-finger right -> tab` and the pane it moved to. It rotates
+at 1 MB, keeping one previous file alongside it. Delete either whenever you
+like.
 
 **It only swallows what it acts on.** Two-finger scrolling reaches your terminal
 untouched unless it becomes a recognised swipe in a listed terminal. Three- and
-four-finger events elsewhere are left to macOS.
+nothing acts on four-finger events, which macOS reaches first anyway.
 
 The daemon runs as you, with your privileges, like anything else you launch from
 a terminal. Nothing here sandboxes it — the argument is that its reach is narrow
