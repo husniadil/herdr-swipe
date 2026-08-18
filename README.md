@@ -20,9 +20,10 @@ now?* That is what the tap is for.
 One gesture, one meaning. No level escalates into another, so what a swipe will
 do is knowable before you make it.
 
-Two-finger scrolling is untouched. Nothing here acts on four fingers, and
-Mission Control and Spaces keep working: macOS reaches those gestures before a
-session tap does.
+Two-finger scrolling still works; only a swipe that is actually recognised is
+taken, and then just for the rest of that swipe. Nothing here acts on four
+fingers, and Mission Control and Spaces keep working: macOS reaches those
+gestures before a session tap does.
 
 **Panes move in reading order**, left to right and top to bottom, wrapping at
 the ends — not by which pane physically sits in the direction you swiped. So
@@ -138,6 +139,8 @@ Constants at the top of `daemon.py`:
 | `TAP_MAX_TRAVEL` | `0.03` | Beyond this a tap was really a swipe |
 | `TAP_MAX_SECONDS` | `0.4` | Longer than this is a hold, not a tap |
 | `UP_IS_PREVIOUS` | `true` | Flip if the space direction reads backwards |
+| `MOMENTUM_SECONDS` | `0.6` | How long a finished swipe keeps eating inertial scroll |
+| `STALE_SECONDS` | `1.0` | A gesture Herdr could not answer in this long is dropped |
 
 Restart the daemon after editing: Python caches imports, so a running daemon
 keeps the code it started with.
