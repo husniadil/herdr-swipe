@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# Versions are written out rather than floated, actions included. Astral
+# publishes the release tag before the moving major alias, so `@v10` can be
+# missing while v10.0.1 is out; an exact tag cannot be in that state.
+#
 # Versions are written out rather than floated. Ruff's rule set moves between
 # releases, so an unpinned lint job fails on rules the development machine has
 # never seen; uv is pinned for the same reason, one step further down. Both are
@@ -20,8 +24,8 @@ jobs:
       matrix:
         python: ["3.9", "3.12"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.8.15"
       # uv fetches the interpreter itself, so this is the same command that
@@ -33,8 +37,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/ruff-action@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/ruff-action@v4.1.0
         with:
           version: "0.14.14"
           args: check --select E,F,W,I,UP,B --line-length 88
@@ -49,8 +53,8 @@ jobs:
     # daemon's dependencies resolve and its modules still import on macOS.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.8.15"
       - run: uv run --script --no-project daemon.py --check-imports
