@@ -6,17 +6,20 @@
 # the terminal's Accessibility grant, so nobody has to approve a second app.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PYTHON="$ROOT/.venv/bin/python"
 DAEMON="$ROOT/daemon.py"
 PIDFILE="$HOME/.local/state/herdr-swipe/daemon.pid"
 
-# `herdr plugin link` registers a plugin without running its [[build]], so a
-# development checkout arrives here with no virtualenv. Build on demand rather
-# than failing, which also makes startup self-healing after a partial install.
-if [ ! -x "$PYTHON" ]; then
-    echo "herdr-swipe: no virtualenv, building one"
-    "$ROOT/scripts/setup.sh"
-fi
+# Paths are probed explicitly rather than trusted to PATH. Herdr may be started
+# from a login context where a version manager has not been activated, and then
+# a tool that is plainly there in an interactive shell is simply absent here.
+find_tool() {
+    if command -v "$1" >/dev/null 2>&1; then command -v "$1"; return 0; fi
+    for dir in "$HOME/.local/bin" "$HOME/.cargo/bin" /opt/homebrew/bin \
+               /usr/local/bin "$HOME/.local/share/mise/shims" /usr/bin; do
+        [ -x "$dir/$1" ] && { echo "$dir/$1"; return 0; }
+    done
+    return 1
+}
 
 # Ask the running daemon to go, by the pid it recorded. Signalling by pid
 # rather than by matching a command line means a path with regex characters in
@@ -33,5 +36,20 @@ if [ -f "$PIDFILE" ]; then
     esac
 fi
 
-nohup "$PYTHON" "$DAEMON" >/dev/null 2>&1 &
-echo "herdr-swipe: daemon started (pid $!)"
+# The daemon declares its own dependencies inline (PEP 723), so uv needs no
+# build step and no checked-in virtualenv -- it can even fetch a Python for a
+# machine that has none.
+if UV=$(find_tool uv); then
+    nohup "$UV" run --script "$DAEMON" >/dev/null 2>&1 &
+    echo "herdr-swipe: daemon started via uv (pid $!)"
+elif [ -x "$ROOT/.venv/bin/python" ]; then
+    nohup "$ROOT/.venv/bin/python" "$DAEMON" >/dev/null 2>&1 &
+    echo "herdr-swipe: daemon started via virtualenv (pid $!)"
+else
+    # No uv, no virtualenv: build one from the dependencies declared in the
+    # script itself, so the two paths cannot drift apart.
+    echo "herdr-swipe: no uv and no virtualenv, building one"
+    "$ROOT/scripts/setup.sh"
+    nohup "$ROOT/.venv/bin/python" "$DAEMON" >/dev/null 2>&1 &
+    echo "herdr-swipe: daemon started via virtualenv (pid $!)"
+fi

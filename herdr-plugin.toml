@@ -5,9 +5,9 @@ min_herdr_version = "0.8.0"
 description = "Trackpad gestures for Herdr: move between panes, tabs and spaces, and jump to the agent waiting on you"
 platforms = ["macos"]
 
-# Creates the virtualenv the daemon needs. Runs once, at install.
-[[build]]
-command = ["scripts/setup.sh"]
+# No [[build]]: the daemon declares its dependencies inline (PEP 723), so
+# `uv run --script` needs no preparation step. scripts/setup.sh exists only as
+# a fallback for a machine with python3 but no uv, and run.sh calls it then.
 
 # Detaches the daemon and exits, which is what Herdr expects of a startup
 # command. Being launched by Herdr is also what makes the daemon inherit the

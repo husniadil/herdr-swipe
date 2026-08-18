@@ -58,6 +58,15 @@ answer it got at launch.
 herdr plugin install husniadil/herdr-swipe --yes
 ```
 
+There is no build step. The daemon declares its dependencies inline
+([PEP 723](https://peps.python.org/pep-0723/)) and runs under
+[uv](https://docs.astral.sh/uv/), which fetches a Python interpreter itself —
+so this works on a machine with no Python at all.
+
+Without uv, a virtualenv is built from the same dependency list on first
+launch, using whatever `python3` is present. With neither, the plugin says so
+and points at uv's one-line installer.
+
 Then swipe. Herdr starts the daemon at every session, and only ever one of it:
 the daemon holds an exclusive lock, so a late arrival exits rather than
 doubling every gesture.
@@ -103,7 +112,7 @@ first launch instead of failing.
 ## How it works
 
 `daemon.py` runs an active `CGEventTap`, tracks touches by identity, and calls
-`herdr_nav.py`, which speaks Herdr's socket directly.
+`navigation.py`, which speaks Herdr's socket directly.
 
 Three things this had to work around, each of which cost real time to find:
 

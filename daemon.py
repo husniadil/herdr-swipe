@@ -1,4 +1,11 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#     "pyobjc-framework-Cocoa",
+#     "pyobjc-framework-Quartz",
+# ]
+# ///
 """HerdrSwipe: trackpad gestures for Herdr.
 
     two fingers,   left/right  -> pane
@@ -35,7 +42,7 @@ import Cocoa
 import Quartz
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import herdr_nav  # noqa: E402
+import navigation  # noqa: E402
 
 ITERM = "com.googlecode.iterm2"
 NS_GESTURE, NS_SCROLL = 29, 22
@@ -168,7 +175,7 @@ def _worker():
             level, target = fn(*args)
             trace(f"  herdr: {level} -> {target}" if level
                   else "  herdr: nowhere to go")
-        except herdr_nav.HerdrUnavailable as exc:
+        except navigation.HerdrUnavailable as exc:
             trace(f"  herdr unavailable: {exc}")
         except Exception as exc:                      # never kill the worker
             trace(f"  unexpected: {type(exc).__name__}: {exc}")
@@ -224,7 +231,7 @@ def handle(proxy, etype, cg_event, refcon):
         if was_three:
             _swallow_until = time.time() + MOMENTUM_SECONDS
         if was_tap and in_iterm():
-            dispatch("TAP -> agent waiting", herdr_nav.attention)
+            dispatch("TAP -> agent waiting", navigation.attention)
         _in_iterm = None
         return None if time.time() < _swallow_until else cg_event
 
@@ -244,16 +251,16 @@ def handle(proxy, etype, cg_event, refcon):
     if n == SWIPE_FINGERS and horizontal:
         _fired = True
         side = "right" if dx > 0 else "left"
-        dispatch(f"2-finger {side} -> pane", herdr_nav.pane_step, side)
+        dispatch(f"2-finger {side} -> pane", navigation.pane_step, side)
     elif n == TAB_FINGERS and horizontal:
         _fired = True
         side = "right" if dx > 0 else "left"
-        dispatch(f"3-finger {side} -> tab", herdr_nav.tab_step, side)
+        dispatch(f"3-finger {side} -> tab", navigation.tab_step, side)
     elif n == TAB_FINGERS and vertical:
         _fired = True
         up = dy > 0
         dispatch(f"3-finger {'up' if up else 'down'} -> space",
-                 herdr_nav.workspace_step,
+                 navigation.workspace_step,
                  "up" if up == UP_IS_PREVIOUS else "down")
 
     return passthrough
