@@ -52,6 +52,33 @@ than it being a standalone app. If you toggle the permission on while the
 terminal is already running, restart the terminal: a running process keeps the
 answer it got at launch.
 
+## What it can see
+
+Accessibility is a broad grant, so it is fair to ask what this spends it on
+before you install it. Everything below is checkable in `daemon.py`; the point
+is that you should not have to take it on faith.
+
+**It never asks for keyboard events.** The tap is created with a mask of exactly
+two event types, gestures and scroll wheel (`daemon.py`, `CGEventTapCreate`).
+Key events are not in the mask, so they are never delivered to this process —
+this is enforced by the OS, not by the code being careful.
+
+**It talks to nothing but Herdr, over a local socket.** The only I/O is an
+`AF_UNIX` connection to `~/.config/herdr/herdr.sock`. There is no network
+socket, no telemetry, and no update check.
+
+**The log records gestures, not content.** `~/.local/state/herdr-swipe/trace.log`
+holds lines like `3-finger right -> tab` and the pane it moved to. It caps
+itself at 1 MB. Delete it whenever you like.
+
+**It only swallows what it acts on.** Two-finger scrolling reaches your terminal
+untouched unless it becomes a recognised swipe in a listed terminal. Three- and
+four-finger events elsewhere are left to macOS.
+
+The daemon runs as you, with your privileges, like anything else you launch from
+a terminal. Nothing here sandboxes it — the argument is that its reach is narrow
+and readable, not that it is contained.
+
 ## Install
 
 ```sh
