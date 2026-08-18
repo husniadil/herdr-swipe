@@ -29,9 +29,12 @@ find_tool() {
 # Only asking, though: two concurrent launches would still interleave here.
 # The daemon holds an exclusive lock and a late arrival exits on its own, so
 # one survives regardless of how this races.
+# Matched on the full path, not the bare filename: another project's
+# daemon.py -- or a shell whose command line merely mentions one -- must not
+# look like ours.
 is_our_daemon() {
     case "$(ps -p "$1" -o command= 2>/dev/null)" in
-        *daemon.py*) return 0 ;;
+        *"$DAEMON"*) return 0 ;;
         *) return 1 ;;
     esac
 }
