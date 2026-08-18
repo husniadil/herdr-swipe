@@ -76,6 +76,12 @@ UP_IS_PREVIOUS = True   # fingers up walks up the space list
 # would leak a tail of scrolling unless we keep swallowing for a moment.
 MOMENTUM_SECONDS = 0.6
 
+# A gesture the worker cannot reach in this long has been overtaken by events.
+# Herdr blocking for a couple of seconds turns a burst of swipes into a queue
+# that drains afterwards, so focus jumps several times once it recovers, long
+# after the hand that meant it moved on. Dropping beats replaying.
+STALE_SECONDS = 1.0
+
 TRACE = os.path.expanduser("~/.local/state/herdr-swipe/trace.log")
 TRACE_MAX_BYTES = 1_000_000
 PIDFILE = os.path.expanduser("~/.local/state/herdr-swipe/daemon.pid")
@@ -210,7 +216,11 @@ _work = queue.Queue()
 
 def _worker():
     while True:
-        label, fn, args = _work.get()
+        made_at, label, fn, args = _work.get()
+        age = time.time() - made_at
+        if age > STALE_SECONDS:
+            trace(f"{label} (dropped, {age:.1f}s stale)")
+            continue
         trace(label)
         try:
             level, target = fn(*args)
@@ -227,7 +237,7 @@ threading.Thread(target=_worker, daemon=True).start()
 
 def dispatch(label, fn, *args):
     """Hand work to the worker. Never blocks: an active tap is the input path."""
-    _work.put((label, fn, args))
+    _work.put((time.time(), label, fn, args))
 
 
 def handle(proxy, etype, cg_event, refcon):

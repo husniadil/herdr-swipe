@@ -163,6 +163,10 @@ replace that set — adding a terminal needs no code change:
 HERDR_SWIPE_HOSTS=com.googlecode.iterm2,com.mitchellh.ghostty
 ```
 
+Setting it to an empty string turns the gestures off everywhere without
+stopping the daemon, which is the quickest way to rule this plugin out while
+debugging something else.
+
 Find an identifier with
 `defaults read /Applications/Foo.app/Contents/Info CFBundleIdentifier`. Warp
 ships a different one per release channel, so Preview is not the id above.
@@ -171,6 +175,10 @@ The check is which terminal is in front, not which one runs herdr. Swiping in a
 listed terminal that has no herdr in it still moves herdr wherever it lives.
 
 ## Gotchas
+
+**A gesture Herdr cannot answer within a second is dropped, not queued.** If
+Herdr stalls, a burst of swipes would otherwise drain afterwards and jump the
+focus several times once it recovers. The trace log names each one it drops.
 
 **An agent stuck on a question is a magnet.** Every tap goes to it until you
 answer, because it really is the thing waiting on you. If taps seem to ignore
