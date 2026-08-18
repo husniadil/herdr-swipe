@@ -219,7 +219,11 @@ def attention(path=DEFAULT_SOCKET):
         start = order.index(snap["focused_pane_id"]) + 1
     except ValueError:
         start = 0
+    # A waiting pane the ordering does not know about still gets visited, at
+    # the back of the queue. The order is there to make repeated taps walk the
+    # session predictably; it is not a list of who is allowed to be found.
     rotated = order[start:] + order[:start]
+    rotated += [pane_id for pane_id in waiting if pane_id not in set(order)]
 
     for state in ATTENTION:
         for pane_id in rotated:
@@ -227,10 +231,30 @@ def attention(path=DEFAULT_SOCKET):
             if agent is None or agent.get("agent_status") != state:
                 continue
             # Focusing a pane in another space needs the space and tab brought
-            # forward first; pane.focus alone does not carry them.
-            call("workspace.focus", {"workspace_id": agent["workspace_id"]}, path)
-            call("tab.focus", {"tab_id": agent["tab_id"]}, path)
-            call("pane.focus", {"pane_id": pane_id}, path)
+            # forward first; pane.focus alone does not carry them. Only the
+            # moves that are actually needed are made, so a tap within the
+            # current tab cannot fail half-way through.
+            moves = []
+            if agent["workspace_id"] != snap["focused_workspace_id"]:
+                moves.append(("workspace.focus",
+                              {"workspace_id": agent["workspace_id"]}))
+            if agent["tab_id"] != snap["focused_tab_id"]:
+                moves.append(("tab.focus", {"tab_id": agent["tab_id"]}))
+            moves.append(("pane.focus", {"pane_id": pane_id}))
+
+            for done, (method, params) in enumerate(moves):
+                try:
+                    call(method, params, path)
+                except HerdrUnavailable as exc:
+                    # The pane can go away between reading the snapshot and
+                    # acting on it. Say where the focus was left, rather than
+                    # reporting a plain failure after having already moved it.
+                    if done:
+                        raise HerdrUnavailable(
+                            f"{method} failed on the way to {pane_id}; focus "
+                            f"moved {done} of {len(moves)} steps: {exc}"
+                        ) from exc
+                    raise
             return state, pane_id
 
     return None, None

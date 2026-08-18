@@ -132,6 +132,54 @@ class Attention(unittest.TestCase):
         self.addCleanup(herdr.close)
         self.assertEqual(navigation.attention(herdr.path), ("blocked", "w1:p3"))
 
+    def test_a_tap_inside_the_current_tab_moves_only_the_pane(self):
+        # Nothing to fail half-way through when the agent is already here.
+        herdr = FakeHerdr({
+            "agent.list": self._agents(("w1:p3", "blocked")),
+            "session.snapshot": self.SNAPSHOT, "pane.focus": {},
+        })
+        self.addCleanup(herdr.close)
+        self.assertEqual(navigation.attention(herdr.path), ("blocked", "w1:p3"))
+        self.assertEqual(herdr.methods(),
+                         ["agent.list", "session.snapshot", "pane.focus"])
+
+    def test_a_pane_that_vanishes_mid_move_says_where_focus_landed(self):
+        # The agent is in another space, so the space and tab move first. If
+        # its pane is gone by then, a plain failure would hide the fact that
+        # you have already been taken somewhere else.
+        snapshot = {"snapshot": dict(self.SNAPSHOT["snapshot"],
+                                     workspaces=[{"workspace_id": "w1", "number": 1},
+                                                 {"workspace_id": "w2", "number": 2}],
+                                     tabs=[{"tab_id": "w1:t1", "workspace_id": "w1",
+                                            "number": 1},
+                                           {"tab_id": "w2:t1", "workspace_id": "w2",
+                                            "number": 1}],
+                                     layouts=[MIXED, {"tab_id": "w2:t1", "panes": [
+                                         {"pane_id": "w2:p1",
+                                          "rect": {"x": 0, "y": 0}}]}])}
+        herdr = FakeHerdr({
+            "agent.list": {"agents": [{"pane_id": "w2:p1", "agent_status": "blocked",
+                                       "workspace_id": "w2", "tab_id": "w2:t1"}]},
+            "session.snapshot": snapshot,
+            "workspace.focus": {}, "tab.focus": {},   # pane.focus errors
+        })
+        self.addCleanup(herdr.close)
+        with self.assertRaises(navigation.HerdrUnavailable) as caught:
+            navigation.attention(herdr.path)
+        self.assertIn("focus moved 2 of 3 steps", str(caught.exception))
+
+    def test_an_agent_the_ordering_missed_is_still_reachable(self):
+        # No layout for its tab, so reading order does not contain its pane.
+        # It is waiting on you regardless.
+        snapshot = {"snapshot": dict(self.SNAPSHOT["snapshot"])}
+        herdr = FakeHerdr({
+            "agent.list": self._agents(("w9:p1", "blocked")),
+            "session.snapshot": snapshot,
+            "workspace.focus": {}, "tab.focus": {}, "pane.focus": {},
+        })
+        self.addCleanup(herdr.close)
+        self.assertEqual(navigation.attention(herdr.path), ("blocked", "w9:p1"))
+
     def test_nothing_waiting_is_not_an_error(self):
         herdr = FakeHerdr({"agent.list": self._agents(("w1:p1", "idle"))})
         self.addCleanup(herdr.close)
