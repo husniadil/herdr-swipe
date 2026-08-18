@@ -24,8 +24,8 @@ def layout(tab_id, panes, focused):
                       for p, x, y in panes]}
 
 
-# Two panes side by side above two full-width ones, which is the layout that
-# used to strand you: the wide panes have no left or right neighbour at all.
+# Two panes side by side above two full-width ones. Used by the attention tests
+# as a session with letter-numbered panes in it.
 MIXED = layout("w1:t1",
                [("w1:p1", 0, 0), ("w1:pA", 100, 0),
                 ("w1:p2", 0, 10), ("w1:p3", 0, 20)],
@@ -146,10 +146,18 @@ class ReplyShape(unittest.TestCase):
     """
 
     def test_a_renamed_field_is_herdr_unavailable(self):
-        herdr = FakeHerdr({"pane.neighbor": {"neighbour": {}}})   # British spelling
+        # The reply arrives and parses; it is the shape that is wrong. Serving
+        # no reply at all would raise HerdrUnavailable from the error path
+        # instead, and prove nothing about the wrapper.
+        herdr = FakeHerdr({"pane.layout": {"layout": {
+            "focused_pane_id": "w1:p1",
+            "panes": [{"pane_id": "w1:p1", "bounds": {"x": 0, "y": 0}},
+                      {"pane_id": "w1:pB", "bounds": {"x": 50, "y": 0}}],
+        }}})                                        # "bounds", not "rect"
         self.addCleanup(herdr.close)
         with self.assertRaises(navigation.HerdrUnavailable):
             navigation.pane_step("right", herdr.path)
+        self.assertEqual(herdr.methods(), ["pane.layout"])   # it really answered
 
     def test_a_bad_direction_is_still_a_valueerror(self):
         # The wrapper must not swallow the caller's own mistake.
