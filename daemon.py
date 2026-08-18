@@ -245,8 +245,16 @@ def handle(proxy, etype, cg_event, refcon):
 
     if etype in (Quartz.kCGEventTapDisabledByTimeout,
                  Quartz.kCGEventTapDisabledByUserInput):
+        # Whatever was on the trackpad is gone as far as we are concerned: the
+        # events that would have reported those fingers lifting arrived while
+        # the tap was off. A touch is only ever removed by its own end event,
+        # so keeping them would leave a session that never closes -- a peak of
+        # three fingers that never drops, and every event after it swallowed
+        # for good. Forgetting the session is the only safe reading.
+        _active.clear()
+        _fired, _peak = False, 0
         Quartz.CGEventTapEnable(_tap, True)
-        trace("tap re-enabled after the system disabled it")
+        trace("tap re-enabled after the system disabled it; touches forgotten")
         return cg_event
 
     if etype == NS_GESTURE:
