@@ -28,6 +28,9 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.8.15"
+          # There is no lockfile to key a cache on -- dependencies are declared
+          # inline in daemon.py -- so a cache here could never be invalidated.
+          enable-cache: false
       # uv fetches the interpreter itself, so this is the same command that
       # runs locally, not a second way of doing it through setup-python.
       - run: >
@@ -57,4 +60,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           version: "0.8.15"
+          # There is no lockfile to key a cache on -- dependencies are declared
+          # inline in daemon.py -- so a cache here could never be invalidated.
+          enable-cache: false
       - run: uv run --script --no-project daemon.py --check-imports
