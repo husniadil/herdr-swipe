@@ -14,6 +14,13 @@ case "$PID" in
     ''|*[!0-9]*) echo "herdr-swipe: no valid pid recorded"; exit 0 ;;
 esac
 
+# The pid is only trustworthy if it still belongs to our daemon: a crash can
+# leave the file behind, and the OS reuses pid numbers.
+case "$(ps -p "$PID" -o command= 2>/dev/null)" in
+    *daemon.py*) ;;
+    *) echo "herdr-swipe: not running (stale pid $PID)"; exit 0 ;;
+esac
+
 if kill "$PID" 2>/dev/null; then
     echo "herdr-swipe: stopped (pid $PID)"
 else

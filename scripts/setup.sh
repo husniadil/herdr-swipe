@@ -8,7 +8,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 DEPS=$(sed -n '/^# \/\/\/ script/,/^# \/\/\/$/p' daemon.py \
-       | sed -n 's/^#  *"\(.*\)",$/\1/p')
+       | sed -n 's/^#  *"\([^"]*\)",\{0,1\}$/\1/p')
 [ -n "$DEPS" ] || { echo "herdr-swipe: no dependencies found in daemon.py" >&2; exit 1; }
 
 find_tool() {

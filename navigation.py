@@ -17,6 +17,7 @@ here opens its own connection; a local AF_UNIX connect costs well under a
 millisecond.
 """
 
+import functools
 import json
 import os
 import socket
@@ -79,6 +80,27 @@ def call(method, params=None, path=DEFAULT_SOCKET, timeout=2.0):
         raise HerdrUnavailable(f"{method}: reply carried no result") from None
 
 
+def _shaped(fn):
+    """Turn a surprising reply shape into HerdrUnavailable.
+
+    The promise at the top of this module is that callers never see anything
+    but HerdrUnavailable. Reaching into a reply breaks that promise the moment
+    Herdr renames a field, and a KeyError from in here would look like a bug in
+    the caller rather than a version mismatch. ValueError is deliberately not
+    caught: a bad direction is the caller's mistake, not Herdr's.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except HerdrUnavailable:
+            raise
+        except (KeyError, TypeError, IndexError) as exc:
+            raise HerdrUnavailable(
+                f"{fn.__name__}: unexpected reply shape: {exc!r}") from exc
+    return wrapper
+
+
 def _step(items, current_id, key, direction):
     """Neighbour of current_id in a wrapped ordering, or None if it is alone."""
     if len(items) < 2:
@@ -111,6 +133,7 @@ def _reading_order(snapshot):
     return order
 
 
+@_shaped
 def pane_step(direction, path=DEFAULT_SOCKET):
     """Move one pane within the current tab. Returns ("pane", id) or (None, None)."""
     direction = _direction(direction)
@@ -140,6 +163,7 @@ def pane_step(direction, path=DEFAULT_SOCKET):
     return "pane", target
 
 
+@_shaped
 def tab_step(direction, path=DEFAULT_SOCKET):
     """Move one tab within the current space, wrapping at the ends.
 
@@ -157,6 +181,7 @@ def tab_step(direction, path=DEFAULT_SOCKET):
     return "tab", target
 
 
+@_shaped
 def workspace_step(direction, path=DEFAULT_SOCKET):
     """Move one space, wrapping at the ends. The space keeps its own focus."""
     direction = _direction(direction)
@@ -169,6 +194,7 @@ def workspace_step(direction, path=DEFAULT_SOCKET):
     return "workspace", target
 
 
+@_shaped
 def attention(path=DEFAULT_SOCKET):
     """Focus the next agent asking for attention. Returns (state, pane_id).
 
@@ -194,7 +220,7 @@ def attention(path=DEFAULT_SOCKET):
     for state in ATTENTION:
         for pane_id in rotated:
             agent = waiting.get(pane_id)
-            if agent is None or agent["agent_status"] != state:
+            if agent is None or agent.get("agent_status") != state:
                 continue
             # Focusing a pane in another space needs the space and tab brought
             # forward first; pane.focus alone does not carry them.

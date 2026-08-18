@@ -21,8 +21,9 @@ page navigation, Mission Control, or stray scrolling inside a TUI. Four-finger
 gestures are left alone, so Mission Control and Spaces keep working there.
 
 Two dependencies, both silent when missing:
-  * macOS three-finger gestures must be ON, or the third finger is never
-    reported to us and every three-finger feature dies without a trace.
+  * macOS three-finger gestures must be ON, and three-finger drag must be OFF.
+    Either way wrong, the third finger never reaches us and every three-finger
+    feature dies without a trace.
   * The process needs Accessibility. It inherits that from the terminal that
     launched it, which is why having Herdr start this beats launching it as a
     standalone app.
@@ -246,12 +247,14 @@ def handle(proxy, etype, cg_event, refcon):
                           math.hypot(entry[2] - entry[0], entry[3] - entry[1]))
 
     if n == 0:
-        was_three = _peak >= TAB_FINGERS
+        # A three-finger session, or any session that fired, keeps swallowing
+        # briefly: inertial scroll arrives after the fingers are gone.
+        claimed = _peak >= TAB_FINGERS or _fired
         was_tap = (_peak == TAB_FINGERS and not _fired
                    and _max_travel < TAP_MAX_TRAVEL
                    and time.time() - _began_at < TAP_MAX_SECONDS)
         _fired, _peak = False, 0
-        if was_three:
+        if claimed:
             _swallow_until = time.time() + MOMENTUM_SECONDS
         if was_tap and in_host():
             dispatch("TAP -> agent waiting", navigation.attention)
@@ -259,8 +262,12 @@ def handle(proxy, etype, cg_event, refcon):
         return None if time.time() < _swallow_until else cg_event
 
     # Once a third finger lands the session is ours for its whole duration,
-    # including the two-finger moments while fingers settle or lift.
-    swallow = _peak >= TAB_FINGERS or time.time() < _swallow_until
+    # including the two-finger moments while fingers settle or lift. A
+    # recognised two-finger swipe claims the rest of its session too: without
+    # that the scroll keeps flowing to the terminal, so one gesture both moves
+    # the pane and scrolls what is inside it. Two-finger scrolling that never
+    # becomes a swipe is untouched.
+    swallow = _peak >= TAB_FINGERS or _fired or time.time() < _swallow_until
     passthrough = None if swallow else cg_event
 
     if _fired or not in_host():

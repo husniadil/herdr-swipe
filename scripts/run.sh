@@ -21,18 +21,26 @@ find_tool() {
     return 1
 }
 
-# Ask the running daemon to go, by the pid it recorded. Signalling by pid
-# rather than by matching a command line means a path with regex characters in
-# it cannot turn this into a wider kill than intended.
+# Ask the running daemon to go, by the pid it recorded -- but only after
+# confirming that pid is still ours. A daemon that died without clearing the
+# pidfile leaves a number behind, and the OS reuses pid numbers, so signalling
+# it blind can kill an unrelated process of yours.
 #
 # Only asking, though: two concurrent launches would still interleave here.
 # The daemon holds an exclusive lock and a late arrival exits on its own, so
 # one survives regardless of how this races.
+is_our_daemon() {
+    case "$(ps -p "$1" -o command= 2>/dev/null)" in
+        *daemon.py*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 if [ -f "$PIDFILE" ]; then
     OLD=$(head -1 "$PIDFILE" 2>/dev/null || true)
     case "$OLD" in
         ''|*[!0-9]*) : ;;
-        *) kill "$OLD" 2>/dev/null || true ;;
+        *) is_our_daemon "$OLD" && kill "$OLD" 2>/dev/null || true ;;
     esac
 fi
 
@@ -41,7 +49,10 @@ fi
 # machine that has none.
 if UV=$(find_tool uv); then
     nohup "$UV" run --script "$DAEMON" >/dev/null 2>&1 &
-    echo "herdr-swipe: daemon started via uv (pid $!)"
+    # $! is uv's own pid; uv execs the interpreter as a child, so the daemon
+    # has a different one. It records that itself, and the pidfile is what
+    # run.sh and stop.sh act on.
+    echo "herdr-swipe: launched via uv (wrapper pid $!, daemon pid in $PIDFILE)"
 elif [ -x "$ROOT/.venv/bin/python" ]; then
     nohup "$ROOT/.venv/bin/python" "$DAEMON" >/dev/null 2>&1 &
     echo "herdr-swipe: daemon started via virtualenv (pid $!)"

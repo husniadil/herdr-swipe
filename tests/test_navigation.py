@@ -116,6 +116,27 @@ class Attention(unittest.TestCase):
         self.assertEqual(navigation.attention(herdr.path), (None, None))
 
 
+class ReplyShape(unittest.TestCase):
+    """A reply Herdr never sends must still arrive as HerdrUnavailable.
+
+    Without this the module raises KeyError from inside itself, which reads as
+    a bug in the caller rather than as Herdr having changed under us.
+    """
+
+    def test_a_renamed_field_is_herdr_unavailable(self):
+        herdr = FakeHerdr({"pane.neighbor": {"neighbour": {}}})   # British spelling
+        self.addCleanup(herdr.close)
+        with self.assertRaises(navigation.HerdrUnavailable):
+            navigation.pane_step("right", herdr.path)
+
+    def test_a_bad_direction_is_still_a_valueerror(self):
+        # The wrapper must not swallow the caller's own mistake.
+        herdr = FakeHerdr({})
+        self.addCleanup(herdr.close)
+        with self.assertRaises(ValueError):
+            navigation.pane_step("sideways", herdr.path)
+
+
 class Transport(unittest.TestCase):
     def test_a_missing_socket_is_reported_not_raised_raw(self):
         with self.assertRaises(navigation.HerdrUnavailable):

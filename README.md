@@ -45,6 +45,20 @@ macOS never reports a third finger to any application, and every three-finger
 feature here dies without a symptom or a log line. Enabling them costs nothing:
 this plugin swallows three-finger events, so macOS will not act on them.
 
+**Three-finger drag must be off.** System Settings → Accessibility → Pointer
+Control → Trackpad Options → "Use trackpad for dragging" with the three-finger
+style. It claims the third finger inside the driver, before any application
+sees it, so it breaks the three-finger gestures here exactly as thoroughly as
+the setting above — and just as silently. Check it with:
+
+```sh
+defaults read com.apple.AppleMultitouchTrackpad TrackpadThreeFingerDrag        # want 0
+defaults read com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture  # want 1
+```
+
+This is a real cost, not a formality: you give up three-finger drag to get
+three-finger gestures. macOS does not let you have both.
+
 **Your terminal needs Accessibility.** System Settings → Privacy & Security →
 Accessibility. The daemon inherits the grant from the terminal that launched it,
 so no second approval is needed — which is exactly why Herdr starts it rather
@@ -158,7 +172,9 @@ answer, because it really is the thing waiting on you. If taps seem to ignore
 your other agents, one of them has an open prompt.
 
 **Three-finger movement no longer scrolls.** Those events are swallowed so they
-cannot leak into a TUI as stray scrolling. Two-finger scrolling is unaffected.
+cannot leak into a TUI as stray scrolling. Two-finger scrolling still works —
+but once a two-finger swipe is recognised, the rest of that swipe is swallowed
+too, so moving to another pane does not also scroll what is inside it.
 
 **`herdr plugin link` does not run `[[build]]`.** Only `install` does. A linked
 development checkout therefore has no virtualenv, so `run.sh` builds one on
