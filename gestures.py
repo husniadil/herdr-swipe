@@ -51,6 +51,11 @@ class Gestures:
         self._host = None          # asked once per session
         self._swallow_until = 0.0
 
+    @property
+    def fingers(self):
+        """How many fingers this session has ever had. Zero between sessions."""
+        return self._peak
+
     def forget(self):
         """Drop the session, for when the system disabled the tap.
 

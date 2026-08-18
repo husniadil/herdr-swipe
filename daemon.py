@@ -83,8 +83,6 @@ TOUCHING = (Cocoa.NSTouchPhaseBegan | Cocoa.NSTouchPhaseMoved
 # the socket; it hands touches over and carries out what comes back.
 _session = gestures.Gestures()
 
-VERBS = {"pane": navigation.pane_step, "tab": navigation.tab_step,
-         "space": navigation.workspace_step}
 
 os.makedirs(os.path.dirname(TRACE), exist_ok=True)
 _trace_file = open(TRACE, "a", buffering=1)   # line buffered, opened once
@@ -247,7 +245,8 @@ def handle(proxy, etype, cg_event, refcon):
         if verb == "attention":
             dispatch("TAP -> agent waiting", navigation.attention)
         else:
-            dispatch(f"{verb} {direction}", VERBS[verb], direction)
+            dispatch(f"{_session.fingers}-finger {direction} -> {verb}",
+                     navigation.VERBS[verb], direction)
 
     return None if swallow else cg_event
 

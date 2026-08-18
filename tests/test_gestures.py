@@ -119,6 +119,18 @@ class FingerCounting(unittest.TestCase):
         self.assertEqual(pad.touch([1, 2], dx=0.2)[1], ("tab", "right"))
 
 
+class Reporting(unittest.TestCase):
+    def test_the_session_reports_how_many_fingers_it_had(self):
+        # The daemon writes this into the trace log, which is the only record
+        # of what a gesture was when one goes wrong.
+        pad = Pad()
+        pad.touch([1, 2, 3])
+        pad.touch([1, 2, 3], dx=0.2)
+        self.assertEqual(pad.g.fingers, 3)
+        pad.lift([1, 2, 3])
+        self.assertEqual(pad.g.fingers, 0)
+
+
 class Tap(unittest.TestCase):
     def test_three_fingers_down_and_straight_up_is_a_tap(self):
         pad = Pad()
