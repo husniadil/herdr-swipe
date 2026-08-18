@@ -45,6 +45,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import navigation  # noqa: E402
 
 ITERM = "com.googlecode.iterm2"
+
+# Terminals whose gestures we take over. Override with HERDR_SWIPE_HOSTS, a
+# comma-separated list of bundle identifiers.
+DEFAULT_HOSTS = ",".join((
+    ITERM,
+    "com.apple.Terminal",
+    "net.kovidgoyal.kitty",
+    "com.github.wez.wezterm",
+    "dev.warp.Warp-Stable",
+))
+HOSTS = frozenset(
+    part.strip()
+    for part in os.environ.get("HERDR_SWIPE_HOSTS", DEFAULT_HOSTS).split(",")
+    if part.strip()
+)
 NS_GESTURE, NS_SCROLL = 29, 22
 
 SWIPE_FINGERS, TAB_FINGERS = 2, 3
@@ -70,7 +85,7 @@ _fired = False
 _peak = 0
 _began_at = 0.0
 _max_travel = 0.0
-_in_iterm = None        # decided once per touch session, see below
+_in_host = None         # decided once per touch session, see below
 _swallow_until = 0.0
 
 os.makedirs(os.path.dirname(TRACE), exist_ok=True)
@@ -121,21 +136,28 @@ def accessibility_trusted():
     return bool(lib.AXIsProcessTrusted())
 
 
-def _iterm_in_front():
-    """Is iTerm2 in front?
+def _host_in_front():
+    """Is one of the terminals in HOSTS in front?
 
-    frontmostApplication() alone is not enough: a hotkey window is a panel that
-    never makes its application frontmost, so the workspace keeps naming
-    whatever was there before. Fall back to the top of the window stack, a few
-    deep, because notifications and overlays can sit above it.
+    frontmostApplication() alone is not enough for iTerm2: a hotkey window is a
+    panel that never makes its application frontmost, so the workspace keeps
+    naming whatever was there before. Fall back to the top of the window stack,
+    a few deep, because notifications and overlays can sit above it.
+
+    That fallback stays iTerm2-only on purpose. No other terminal here has a
+    window that hides its own app from the workspace, so running the scan for
+    them would claim gestures whenever one merely sits in the background.
 
     The window scan costs ~0.7ms against 0.02ms for the frontmost check, which
     is why the caller asks once per touch session rather than per event: this
     runs inside an active tap, on the input path for the whole machine.
     """
     app = Cocoa.NSWorkspace.sharedWorkspace().frontmostApplication()
-    if app is not None and app.bundleIdentifier() == ITERM:
+    if app is not None and app.bundleIdentifier() in HOSTS:
         return True
+
+    if ITERM not in HOSTS:
+        return False
 
     info = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly
@@ -154,11 +176,11 @@ def _iterm_in_front():
     return False
 
 
-def in_iterm():
-    global _in_iterm
-    if _in_iterm is None:
-        _in_iterm = _iterm_in_front()
-    return _in_iterm
+def in_host():
+    global _in_host
+    if _in_host is None:
+        _in_host = _host_in_front()
+    return _in_host
 
 
 # Gestures are handled by one worker, in the order they were made. Two threads
@@ -190,7 +212,7 @@ def dispatch(label, fn, *args):
 
 
 def handle(proxy, etype, cg_event, refcon):
-    global _fired, _peak, _began_at, _max_travel, _in_iterm, _swallow_until
+    global _fired, _peak, _began_at, _max_travel, _in_host, _swallow_until
 
     if etype in (Quartz.kCGEventTapDisabledByTimeout,
                  Quartz.kCGEventTapDisabledByUserInput):
@@ -215,7 +237,7 @@ def handle(proxy, etype, cg_event, refcon):
 
     n = len(_active)
     if n and not _peak:                    # first finger of a new session
-        _began_at, _max_travel, _in_iterm = time.time(), 0.0, None
+        _began_at, _max_travel, _in_host = time.time(), 0.0, None
     _peak = max(_peak, n)
 
     for entry in _active.values():
@@ -230,9 +252,9 @@ def handle(proxy, etype, cg_event, refcon):
         _fired, _peak = False, 0
         if was_three:
             _swallow_until = time.time() + MOMENTUM_SECONDS
-        if was_tap and in_iterm():
+        if was_tap and in_host():
             dispatch("TAP -> agent waiting", navigation.attention)
-        _in_iterm = None
+        _in_host = None
         return None if time.time() < _swallow_until else cg_event
 
     # Once a third finger lands the session is ours for its whole duration,
@@ -240,7 +262,7 @@ def handle(proxy, etype, cg_event, refcon):
     swallow = _peak >= TAB_FINGERS or time.time() < _swallow_until
     passthrough = None if swallow else cg_event
 
-    if _fired or not in_iterm():
+    if _fired or not in_host():
         return passthrough
 
     dx = sum(e[2] - e[0] for e in _active.values()) / n

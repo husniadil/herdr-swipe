@@ -96,6 +96,33 @@ Constants at the top of `daemon.py`:
 Restart the daemon after editing: Python caches imports, so a running daemon
 keeps the code it started with.
 
+### Which terminals it takes over
+
+Gestures are only claimed while one of these is in front — anywhere else macOS
+keeps them:
+
+| Terminal | Bundle identifier |
+| --- | --- |
+| iTerm2 | `com.googlecode.iterm2` |
+| Apple Terminal | `com.apple.Terminal` |
+| kitty | `net.kovidgoyal.kitty` |
+| WezTerm | `com.github.wez.wezterm` |
+| Warp | `dev.warp.Warp-Stable` |
+
+Set `HERDR_SWIPE_HOSTS` to a comma-separated list of bundle identifiers to
+replace that set — adding a terminal needs no code change:
+
+```sh
+HERDR_SWIPE_HOSTS=com.googlecode.iterm2,com.mitchellh.ghostty
+```
+
+Find an identifier with
+`defaults read /Applications/Foo.app/Contents/Info CFBundleIdentifier`. Warp
+ships a different one per release channel, so Preview is not the id above.
+
+The check is which terminal is in front, not which one runs herdr. Swiping in a
+listed terminal that has no herdr in it still moves herdr wherever it lives.
+
 ## Gotchas
 
 **An agent stuck on a question is a magnet.** Every tap goes to it until you
@@ -151,6 +178,33 @@ faking all three would only assert that the fake works.
 
 Restart the daemon after editing: Python caches imports, so a running daemon
 keeps the code it started with.
+
+### Which terminals it takes over
+
+Gestures are only claimed while one of these is in front — anywhere else macOS
+keeps them:
+
+| Terminal | Bundle identifier |
+| --- | --- |
+| iTerm2 | `com.googlecode.iterm2` |
+| Apple Terminal | `com.apple.Terminal` |
+| kitty | `net.kovidgoyal.kitty` |
+| WezTerm | `com.github.wez.wezterm` |
+| Warp | `dev.warp.Warp-Stable` |
+
+Set `HERDR_SWIPE_HOSTS` to a comma-separated list of bundle identifiers to
+replace that set — adding a terminal needs no code change:
+
+```sh
+HERDR_SWIPE_HOSTS=com.googlecode.iterm2,com.mitchellh.ghostty
+```
+
+Find an identifier with
+`defaults read /Applications/Foo.app/Contents/Info CFBundleIdentifier`. Warp
+ships a different one per release channel, so Preview is not the id above.
+
+The check is which terminal is in front, not which one runs herdr. Swiping in a
+listed terminal that has no herdr in it still moves herdr wherever it lives.
 
 ## License
 
