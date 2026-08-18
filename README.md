@@ -105,6 +105,7 @@ keeps them:
 | --- | --- |
 | iTerm2 | `com.googlecode.iterm2` |
 | Apple Terminal | `com.apple.Terminal` |
+| Ghostty | `com.mitchellh.ghostty` |
 | kitty | `net.kovidgoyal.kitty` |
 | WezTerm | `com.github.wez.wezterm` |
 | Warp | `dev.warp.Warp-Stable` |

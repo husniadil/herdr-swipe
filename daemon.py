@@ -51,6 +51,7 @@ ITERM = "com.googlecode.iterm2"
 DEFAULT_HOSTS = ",".join((
     ITERM,
     "com.apple.Terminal",
+    "com.mitchellh.ghostty",
     "net.kovidgoyal.kitty",
     "com.github.wez.wezterm",
     "dev.warp.Warp-Stable",
