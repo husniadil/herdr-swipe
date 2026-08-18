@@ -1,0 +1,119 @@
+# herdr-swipe
+
+Trackpad gestures for [Herdr](https://herdr.dev). Move between panes, tabs and
+spaces without reaching for the keyboard, and jump straight to the agent that
+is waiting on you.
+
+Herdr already has keybindings for panes, tabs and spaces. It has none for the
+question you actually ask all day while running a fleet: *who needs me right
+now?* That is what the tap is for.
+
+## Gestures
+
+| Gesture | Does |
+| --- | --- |
+| Two fingers, left / right | Move one pane, within the tab |
+| Three fingers, left / right | Move one tab, within the space |
+| Three fingers, up / down | Move one space |
+| Three fingers, tap | Focus the agent waiting on you |
+
+One gesture, one meaning. No level escalates into another, so what a swipe will
+do is knowable before you make it.
+
+Two-finger scrolling is untouched. Four-finger gestures are left to macOS, so
+Mission Control and Spaces keep working there.
+
+**Panes that are stacked rather than side by side** are still reachable: when
+there is no neighbour in the direction you swiped, focus moves to the next pane
+in reading order — left to right, top to bottom. Every pane is reachable by
+repeating one gesture, and swiping back always returns you where you were.
+
+**The tap** visits `blocked` agents before `done` ones: one is holding a
+question open, the other merely finished while you were looking elsewhere.
+Repeated taps walk through every waiting agent in sidebar order.
+
+## Requirements
+
+macOS only. The daemon reads raw trackpad touches through a `CGEventTap`, which
+has no equivalent elsewhere.
+
+Two prerequisites, both of which fail **silently** when missing:
+
+**Three-finger gestures must be enabled in macOS.** System Settings → Trackpad →
+More Gestures → "Swipe between pages" must include three fingers. With them off,
+macOS never reports a third finger to any application, and every three-finger
+feature here dies without a symptom or a log line. Enabling them costs nothing:
+this plugin swallows three-finger events, so macOS will not act on them.
+
+**Your terminal needs Accessibility.** System Settings → Privacy & Security →
+Accessibility. The daemon inherits the grant from the terminal that launched it,
+so no second approval is needed — which is exactly why Herdr starts it rather
+than it being a standalone app. If you toggle the permission on while the
+terminal is already running, restart the terminal: a running process keeps the
+answer it got at launch.
+
+## Install
+
+```sh
+herdr plugin install husniadil/herdr-swipe --yes
+```
+
+Then swipe. To make sure it is alive, or after changing the code:
+
+```sh
+herdr plugin action invoke herdr-swipe.restart
+```
+
+## Tuning
+
+Constants at the top of `daemon.py`:
+
+| Name | Default | Meaning |
+| --- | --- | --- |
+| `THRESHOLD` | `0.08` | How far fingers travel before a swipe counts |
+| `AXIS_BIAS` | `2.0` | How much one axis must beat the other |
+| `TAP_MAX_TRAVEL` | `0.03` | Beyond this a tap was really a swipe |
+| `TAP_MAX_SECONDS` | `0.4` | Longer than this is a hold, not a tap |
+| `UP_IS_PREVIOUS` | `true` | Flip if the space direction reads backwards |
+
+Restart the daemon after editing: Python caches imports, so a running daemon
+keeps the code it started with.
+
+## Gotchas
+
+**An agent stuck on a question is a magnet.** Every tap goes to it until you
+answer, because it really is the thing waiting on you. If taps seem to ignore
+your other agents, one of them has an open prompt.
+
+**Three-finger movement no longer scrolls.** Those events are swallowed so they
+cannot leak into a TUI as stray scrolling. Two-finger scrolling is unaffected.
+
+## How it works
+
+`daemon.py` runs an active `CGEventTap`, tracks touches by identity, and calls
+`herdr_nav.py`, which speaks Herdr's socket directly.
+
+Three things this had to work around, each of which cost real time to find:
+
+**A gesture event carries only the touches that changed**, not every finger
+currently down. Counting per event makes the finger count flicker and destroys
+any movement baseline, so touches are tracked by identity across events.
+
+**`NSEventTypeSwipe` no longer reaches terminals.** iTerm2's own gesture
+bindings sit on `swipeWithEvent:`, which modern macOS never calls for a
+three-finger swipe, so binding a gesture there does nothing at all. Reading raw
+touches sidesteps that entirely.
+
+**A hotkey window never becomes the frontmost application.** It is a panel, so
+`NSWorkspace.frontmostApplication()` keeps naming whatever was in front before
+it appeared. The window stack has to be consulted instead.
+
+The tap is active rather than listen-only, so three-finger events belong to this
+plugin instead of to macOS. That puts it on the input path for the whole
+machine, so the callback does no blocking work: gestures are handed to a single
+worker thread, in order, and the expensive frontmost-application check happens
+once per touch rather than once per event.
+
+## License
+
+MIT

@@ -1,0 +1,23 @@
+id = "herdr-swipe"
+name = "Herdr Swipe"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Trackpad gestures for Herdr: move between panes, tabs and spaces, and jump to the agent waiting on you"
+platforms = ["macos"]
+
+# Creates the virtualenv the daemon needs. Runs once, at install.
+[[build]]
+command = ["scripts/setup.sh"]
+
+# Detaches the daemon and exits, which is what Herdr expects of a startup
+# command. Being launched by Herdr is also what makes the daemon inherit the
+# terminal's Accessibility grant instead of asking for its own.
+[[startup]]
+id = "daemon"
+command = ["scripts/run.sh"]
+
+[[actions]]
+id = "restart"
+title = "Restart gesture daemon"
+contexts = ["workspace"]
+command = ["scripts/run.sh"]
