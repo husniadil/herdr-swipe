@@ -43,7 +43,11 @@ if [ -f "$PIDFILE" ]; then
     OLD=$(head -1 "$PIDFILE" 2>/dev/null || true)
     case "$OLD" in
         ''|*[!0-9]*) : ;;
-        *) is_our_daemon "$OLD" && kill "$OLD" 2>/dev/null || true ;;
+        *)
+            if is_our_daemon "$OLD"; then
+                kill "$OLD" 2>/dev/null || true
+            fi
+            ;;
     esac
 fi
 
