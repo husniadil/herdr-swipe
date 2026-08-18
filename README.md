@@ -23,10 +23,13 @@ do is knowable before you make it.
 Two-finger scrolling is untouched. Four-finger gestures are left to macOS, so
 Mission Control and Spaces keep working there.
 
-**Panes that are stacked rather than side by side** are still reachable: when
-there is no neighbour in the direction you swiped, focus moves to the next pane
-in reading order — left to right, top to bottom. Every pane is reachable by
-repeating one gesture, and swiping back always returns you where you were.
+**Panes move in reading order**, left to right and top to bottom, wrapping at
+the ends — not by which pane physically sits in the direction you swiped. So
+every pane is reached by repeating one gesture, and swiping back always returns
+you where you were. The cost is that "left" from a pane whose predecessor sits
+above it moves up rather than sideways. Herdr's own spatial adjacency reads
+better for a single move but is not the inverse of itself, and mixing the two
+left panes permanently unreachable in one direction.
 
 **The tap** visits `blocked` agents before `done` ones: one is holding a
 question open, the other merely finished while you were looking elsewhere.

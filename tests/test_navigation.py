@@ -32,40 +32,62 @@ MIXED = layout("w1:t1",
                "w1:pA")
 
 
-class PaneStep(unittest.TestCase):
-    def test_uses_herdr_adjacency_when_there_is_a_neighbour(self):
-        herdr = FakeHerdr({
-            "pane.neighbor": {"neighbor": {"neighbor_pane_id": "w1:p2"}},
-            "pane.focus_direction": {},
-        })
-        self.addCleanup(herdr.close)
-        self.assertEqual(navigation.pane_step("right", herdr.path),
-                         ("pane", "w1:p2"))
-        self.assertIn("pane.focus_direction", herdr.methods())
+# One tall pane on the left, two stacked on the right. This is the layout that
+# exposed the old mix of Herdr adjacency and positional fallback: Herdr reports
+# the pane left of w1:pC as w1:p1, jumping over w1:pB, and reports nothing to
+# the left of w1:p1 at all. Forward visited all three, backward ping-ponged
+# between two, and w1:pB could not be reached going left.
+LSHAPE = [("w1:p1", 0, 0), ("w1:pB", 50, 0), ("w1:pC", 50, 50)]
 
-    def test_falls_through_to_reading_order_when_stranded(self):
-        # w1:p2 is full width: no left, no right. Without the fallback a
-        # horizontal gesture leaves you there for good.
-        herdr = FakeHerdr({
-            "pane.neighbor": {"neighbor": {}},
-            "pane.layout": {"layout": layout(
-                "w1:t1", [("w1:p1", 0, 0), ("w1:pA", 100, 0),
-                          ("w1:p2", 0, 10), ("w1:p3", 0, 20)], "w1:p2")},
-            "pane.focus": {},
-        })
-        self.addCleanup(herdr.close)
-        self.assertEqual(navigation.pane_step("right", herdr.path),
-                         ("pane", "w1:p3"))
+# Herdr's real answers for that layout, taken from a live pane.neighbor probe.
+# The fake serves them so a reversion to adjacency-first reproduces the actual
+# bug here rather than dying on a missing canned reply.
+ADJACENT = {
+    ("w1:p1", "left"): None, ("w1:p1", "right"): "w1:pB",
+    ("w1:pB", "left"): "w1:p1", ("w1:pB", "right"): None,
+    ("w1:pC", "left"): "w1:p1", ("w1:pC", "right"): None,
+}
+
+
+class PaneStep(unittest.TestCase):
+    def walk(self, direction, start, steps):
+        """Follow the focus for real: each step re-reads a layout that moved."""
+        visited, focus = [], start
+        for _ in range(steps):
+            herdr = FakeHerdr({
+                "pane.layout": {"layout": layout("w1:t1", LSHAPE, focus)},
+                "pane.focus": {},
+                # Served, but never consulted: spatial adjacency is not the
+                # inverse of itself, so relying on it cannot give a true cycle.
+                "pane.neighbor": {"neighbor": (
+                    {"neighbor_pane_id": ADJACENT[(focus, direction)]}
+                    if ADJACENT[(focus, direction)] else {})},
+                "pane.focus_direction": {},
+            })
+            self.addCleanup(herdr.close)
+            _, focus = navigation.pane_step(direction, herdr.path)
+            visited.append(focus)
+        return visited
+
+    def test_forward_cycles_through_every_pane(self):
+        self.assertEqual(self.walk("right", "w1:p1", 3),
+                         ["w1:pB", "w1:pC", "w1:p1"])
+
+    def test_backward_cycles_through_every_pane(self):
+        # The one that used to fail: w1:pB was unreachable going left.
+        self.assertEqual(self.walk("left", "w1:pC", 3),
+                         ["w1:pB", "w1:p1", "w1:pC"])
 
     def test_left_is_the_exact_inverse_of_right(self):
-        replies = {"pane.neighbor": {"neighbor": {}},
-                   "pane.layout": {"layout": MIXED}, "pane.focus": {}}
-        herdr = FakeHerdr(replies)
+        forward = self.walk("right", "w1:pB", 1)[0]
+        back = self.walk("left", forward, 1)[0]
+        self.assertEqual(back, "w1:pB")
+
+    def test_a_lone_pane_has_nowhere_to_go(self):
+        herdr = FakeHerdr({"pane.layout": {"layout": layout(
+            "w1:t1", [("w1:p1", 0, 0)], "w1:p1")}})
         self.addCleanup(herdr.close)
-        forward = navigation.pane_step("right", herdr.path)[1]
-        back = navigation.pane_step("left", herdr.path)[1]
-        self.assertEqual(forward, "w1:p2")   # pA -> next in reading order
-        self.assertEqual(back, "w1:p1")      # pA -> previous
+        self.assertEqual(navigation.pane_step("right", herdr.path), (None, None))
 
 
 class Attention(unittest.TestCase):

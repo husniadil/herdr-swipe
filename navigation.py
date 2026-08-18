@@ -135,19 +135,23 @@ def _reading_order(snapshot):
 
 @_shaped
 def pane_step(direction, path=DEFAULT_SOCKET):
-    """Move one pane within the current tab. Returns ("pane", id) or (None, None)."""
+    """Move one pane within the current tab. Returns ("pane", id) or (None, None).
+
+    Reading order, both ways: left to right, top to bottom, wrapping at the
+    ends. Herdr's own spatial adjacency (pane.neighbor) is deliberately not
+    used, even though it matches the geometry better, because it is not the
+    inverse of itself. Take a full-height pane on the left beside two stacked
+    on the right: Herdr says the pane left of the bottom-right one is the tall
+    one, jumping over the top-right pane, while nothing has the tall pane on
+    its left at all. Mixing that with a positional fallback gives a forward
+    cycle that visits all three and a backward one that ping-pongs between two,
+    stranding the third for good.
+
+    So the geometry loses and the cycle wins: repeated swipes reach every pane,
+    and left undoes right exactly. The cost is that "left" from a pane whose
+    predecessor sits above it moves up rather than sideways.
+    """
     direction = _direction(direction)
-
-    # Herdr's own adjacency first, so the move matches what you see. Omitting
-    # pane_id targets the UI-focused pane, which is what a gesture means.
-    neighbour = call("pane.neighbor", {"direction": direction}, path)["neighbor"]
-    if neighbour.get("neighbor_pane_id"):
-        call("pane.focus_direction", {"direction": direction}, path)
-        return "pane", neighbour["neighbor_pane_id"]
-
-    # No neighbour that way. A horizontal gesture would otherwise strand you in
-    # a full-width pane, which has no left or right at all, so fall through to
-    # the next pane in reading order: left to right, top to bottom.
     layout = call("pane.layout", {}, path)["layout"]
     panes = layout.get("panes") or []
     if len(panes) < 2:
