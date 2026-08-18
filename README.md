@@ -130,7 +130,7 @@ shutdown hook, so nothing tears it down; use the `stop` action.
 
 ## Tuning
 
-Constants at the top of `daemon.py`:
+Constants at the top of `gestures.py`:
 
 | Name | Default | Meaning |
 | --- | --- | --- |
@@ -140,7 +140,7 @@ Constants at the top of `daemon.py`:
 | `TAP_MAX_SECONDS` | `0.4` | Longer than this is a hold, not a tap |
 | `UP_IS_PREVIOUS` | `true` | Flip if the space direction reads backwards |
 | `MOMENTUM_SECONDS` | `0.6` | How long a finished swipe keeps eating inertial scroll |
-| `STALE_SECONDS` | `1.0` | A gesture Herdr could not answer in this long is dropped |
+| `STALE_SECONDS` | `1.0` | A gesture Herdr could not answer in this long is dropped (in `daemon.py`) |
 
 Restart the daemon after editing: Python caches imports, so a running daemon
 keeps the code it started with.
@@ -198,8 +198,9 @@ first launch instead of failing.
 
 ## How it works
 
-`daemon.py` runs an active `CGEventTap`, tracks touches by identity, and calls
-`navigation.py`, which speaks Herdr's socket directly.
+`daemon.py` runs an active `CGEventTap` and owns the clock. `gestures.py` holds
+the state machine that decides what the fingers mean, with no Cocoa in it, so
+it can be driven from a test. `navigation.py` speaks Herdr's socket directly.
 
 Three things this had to work around, each of which cost real time to find:
 
@@ -231,10 +232,13 @@ herdr plugin action invoke herdr-swipe.restart
 ```
 
 The tests cover `navigation.py` against a fake Herdr socket, including the
-detail most likely to break a client: one request per connection, then close.
-The daemon is deliberately not covered. Gesture recognition needs a trackpad, a
-hand, and an Accessibility grant, none of which a CI runner has, and a test
-faking all three would only assert that the fake works.
+detail most likely to break a client: one request per connection, then close,
+and `gestures.py` by putting fingers on a trackpad that exists only in the
+test. What is left uncovered is `daemon.py` itself, which is now only Cocoa
+plumbing: reading touches off an event, handing them over, carrying out what
+comes back. Recognition needs a trackpad, a hand and an Accessibility grant,
+but deciding what the fingers mean does not, and that is where every bug has
+been.
 
 Restart the daemon after editing: Python caches imports, so a running daemon
 keeps the code it started with.

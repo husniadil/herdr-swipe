@@ -33,7 +33,6 @@ Two dependencies, both silent when missing:
 import ctypes
 import ctypes.util
 import fcntl
-import math
 import os
 import queue
 import sys
@@ -44,6 +43,7 @@ import Cocoa
 import Quartz
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gestures  # noqa: E402
 import navigation  # noqa: E402
 
 ITERM = "com.googlecode.iterm2"
@@ -65,17 +65,6 @@ HOSTS = frozenset(
 )
 NS_GESTURE, NS_SCROLL = 29, 22
 
-SWIPE_FINGERS, TAB_FINGERS = 2, 3
-THRESHOLD = 0.08        # travel before a swipe counts
-AXIS_BIAS = 2.0         # how much one axis must beat the other
-TAP_MAX_TRAVEL = 0.03
-TAP_MAX_SECONDS = 0.4
-UP_IS_PREVIOUS = True   # fingers up walks up the space list
-
-# Inertial scroll arrives after the fingers are gone, so a three-finger flick
-# would leak a tail of scrolling unless we keep swallowing for a moment.
-MOMENTUM_SECONDS = 0.6
-
 # A gesture the worker cannot reach in this long has been overtaken by events.
 # Herdr blocking for a couple of seconds turns a burst of swipes into a queue
 # that drains afterwards, so focus jumps several times once it recovers, long
@@ -89,13 +78,13 @@ PIDFILE = os.path.expanduser("~/.local/state/herdr-swipe/daemon.pid")
 TOUCHING = (Cocoa.NSTouchPhaseBegan | Cocoa.NSTouchPhaseMoved
             | Cocoa.NSTouchPhaseStationary)
 
-_active = {}            # touch identity -> [x0, y0, x, y]
-_fired = False
-_peak = 0
-_began_at = 0.0
-_max_travel = 0.0
-_in_host = None         # decided once per touch session, see below
-_swallow_until = 0.0
+# What the fingers mean lives in gestures.py, which knows nothing about Cocoa
+# and can therefore be driven by a test. This file owns the tap, the clock and
+# the socket; it hands touches over and carries out what comes back.
+_session = gestures.Gestures()
+
+VERBS = {"pane": navigation.pane_step, "tab": navigation.tab_step,
+         "space": navigation.workspace_step}
 
 os.makedirs(os.path.dirname(TRACE), exist_ok=True)
 _trace_file = open(TRACE, "a", buffering=1)   # line buffered, opened once
@@ -201,13 +190,6 @@ def _host_in_front():
     return False
 
 
-def in_host():
-    global _in_host
-    if _in_host is None:
-        _in_host = _host_in_front()
-    return _in_host
-
-
 # Gestures are handled by one worker, in the order they were made. Two threads
 # would each read the current focus and then write a new one, so a quick pair
 # of swipes could land somewhere neither of them meant.
@@ -241,94 +223,33 @@ def dispatch(label, fn, *args):
 
 
 def handle(proxy, etype, cg_event, refcon):
-    global _fired, _peak, _began_at, _max_travel, _in_host, _swallow_until
-
     if etype in (Quartz.kCGEventTapDisabledByTimeout,
                  Quartz.kCGEventTapDisabledByUserInput):
-        # Whatever was on the trackpad is gone as far as we are concerned: the
-        # events that would have reported those fingers lifting arrived while
-        # the tap was off. A touch is only ever removed by its own end event,
-        # so keeping them would leave a session that never closes -- a peak of
-        # three fingers that never drops, and every event after it swallowed
-        # for good. Forgetting the session is the only safe reading.
-        _active.clear()
-        _fired, _peak = False, 0
+        _session.forget()
         Quartz.CGEventTapEnable(_tap, True)
         trace("tap re-enabled after the system disabled it; touches forgotten")
         return cg_event
 
+    changed = []
     if etype == NS_GESTURE:
         event = Cocoa.NSEvent.eventWithCGEvent_(cg_event)
         # A gesture event carries only the touches that CHANGED, not every
         # finger down, so tracking by identity is the only honest finger count.
         for touch in (event.allTouches() if event else None) or []:
             pos = touch.normalizedPosition()
-            if touch.phase() & TOUCHING:
-                entry = _active.get(touch.identity())
-                if entry is None:
-                    _active[touch.identity()] = [pos.x, pos.y, pos.x, pos.y]
-                else:
-                    entry[2], entry[3] = pos.x, pos.y
-            else:
-                _active.pop(touch.identity(), None)
+            changed.append((touch.identity(), pos.x, pos.y,
+                            bool(touch.phase() & TOUCHING)))
 
-    n = len(_active)
-    if n and not _peak:                    # first finger of a new session
-        _began_at, _max_travel, _in_host = time.time(), 0.0, None
-    _peak = max(_peak, n)
+    swallow, action = _session.update(changed, time.time(), _host_in_front)
 
-    for entry in _active.values():
-        _max_travel = max(_max_travel,
-                          math.hypot(entry[2] - entry[0], entry[3] - entry[1]))
-
-    if n == 0:
-        # A three-finger session, or any session that fired, keeps swallowing
-        # briefly: inertial scroll arrives after the fingers are gone.
-        claimed = _peak >= TAB_FINGERS or _fired
-        was_tap = (_peak == TAB_FINGERS and not _fired
-                   and _max_travel < TAP_MAX_TRAVEL
-                   and time.time() - _began_at < TAP_MAX_SECONDS)
-        _fired, _peak = False, 0
-        if claimed:
-            _swallow_until = time.time() + MOMENTUM_SECONDS
-        if was_tap and in_host():
+    if action:
+        verb, direction = action
+        if verb == "attention":
             dispatch("TAP -> agent waiting", navigation.attention)
-        _in_host = None
-        return None if time.time() < _swallow_until else cg_event
+        else:
+            dispatch(f"{verb} {direction}", VERBS[verb], direction)
 
-    # Once a third finger lands the session is ours for its whole duration,
-    # including the two-finger moments while fingers settle or lift. A
-    # recognised two-finger swipe claims the rest of its session too: without
-    # that the scroll keeps flowing to the terminal, so one gesture both moves
-    # the pane and scrolls what is inside it. Two-finger scrolling that never
-    # becomes a swipe is untouched.
-    swallow = _peak >= TAB_FINGERS or _fired or time.time() < _swallow_until
-    passthrough = None if swallow else cg_event
-
-    if _fired or not in_host():
-        return passthrough
-
-    dx = sum(e[2] - e[0] for e in _active.values()) / n
-    dy = sum(e[3] - e[1] for e in _active.values()) / n
-    horizontal = abs(dx) > THRESHOLD and abs(dx) > abs(dy) * AXIS_BIAS
-    vertical = abs(dy) > THRESHOLD and abs(dy) > abs(dx) * AXIS_BIAS
-
-    if n == SWIPE_FINGERS and horizontal:
-        _fired = True
-        side = "right" if dx > 0 else "left"
-        dispatch(f"2-finger {side} -> pane", navigation.pane_step, side)
-    elif n == TAB_FINGERS and horizontal:
-        _fired = True
-        side = "right" if dx > 0 else "left"
-        dispatch(f"3-finger {side} -> tab", navigation.tab_step, side)
-    elif n == TAB_FINGERS and vertical:
-        _fired = True
-        up = dy > 0
-        dispatch(f"3-finger {'up' if up else 'down'} -> space",
-                 navigation.workspace_step,
-                 "up" if up == UP_IS_PREVIOUS else "down")
-
-    return passthrough
+    return None if swallow else cg_event
 
 
 # CI can prove the dependencies resolve and the module imports, but it cannot
