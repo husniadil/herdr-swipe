@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # The navigation policy is pure socket-and-JSON, so it runs anywhere. Only
+    # the daemon is macOS-bound, and the daemon is not what these tests cover.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"   # the oldest the script claims to support
+      - run: python -m unittest discover -s tests -v
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check --select E,F,W,I,UP,B --line-length 88
+      # The shell scripts are where a real bug hid once: a pkill pattern that
+      # could never match, so every restart quietly left the old daemon running.
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck --shell=sh scripts/*.sh
+
+  daemon-imports:
+    # Not a behaviour test: gesture recognition needs a trackpad, a hand, and
+    # an Accessibility grant, none of which a runner has. This only asserts the
+    # daemon's dependencies resolve and its module still imports on macOS.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run --script --no-project daemon.py --check-imports

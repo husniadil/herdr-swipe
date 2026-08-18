@@ -135,6 +135,23 @@ machine, so the callback does no blocking work: gestures are handed to a single
 worker thread, in order, and the expensive frontmost-application check happens
 once per touch rather than once per event.
 
+## Development
+
+```sh
+herdr plugin link .                       # register this checkout
+python3 -m unittest discover -s tests     # the navigation policy
+herdr plugin action invoke herdr-swipe.restart
+```
+
+The tests cover `navigation.py` against a fake Herdr socket, including the
+detail most likely to break a client: one request per connection, then close.
+The daemon is deliberately not covered. Gesture recognition needs a trackpad, a
+hand, and an Accessibility grant, none of which a CI runner has, and a test
+faking all three would only assert that the fake works.
+
+Restart the daemon after editing: Python caches imports, so a running daemon
+keeps the code it started with.
+
 ## License
 
 MIT

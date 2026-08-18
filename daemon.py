@@ -266,6 +266,13 @@ def handle(proxy, etype, cg_event, refcon):
     return passthrough
 
 
+# CI can prove the dependencies resolve and the module imports, but it cannot
+# prove anything about gestures: there is no trackpad and no Accessibility
+# grant on a runner. Stop here rather than leaving a daemon running in one.
+if "--check-imports" in sys.argv:
+    print(f"herdr-swipe: imports fine (trusted={accessibility_trusted()})")
+    raise SystemExit(0)
+
 _lock = claim_singleton()
 if _lock is None:
     trace(f"another daemon already holds {PIDFILE}; exiting")

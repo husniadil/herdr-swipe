@@ -225,5 +225,5 @@ if __name__ == "__main__":
             raise SystemExit(2)
     except HerdrUnavailable as exc:
         print(f"herdr unavailable: {exc}")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
     print(f"{level} -> {target}" if level else "no-op (nowhere to go)")
