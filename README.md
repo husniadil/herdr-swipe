@@ -234,7 +234,10 @@ herdr plugin action invoke herdr-swipe.restart
 The tests cover `navigation.py` against a fake Herdr socket, including the
 detail most likely to break a client: one request per connection, then close,
 and `gestures.py` by putting fingers on a trackpad that exists only in the
-test. What is left uncovered is `daemon.py` itself, which is now only Cocoa
+test. Alongside the examples there are seeded property runs: six hundred random
+touch sequences asserting what must never happen -- acting outside a terminal
+we take over, two gestures from one session, swallowing that outlives the
+hand. What is left uncovered is `daemon.py` itself, which is now only Cocoa
 plumbing: reading touches off an event, handing them over, carrying out what
 comes back. Recognition needs a trackpad, a hand and an Accessibility grant,
 but deciding what the fingers mean does not, and that is where every bug has
