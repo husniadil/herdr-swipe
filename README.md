@@ -58,11 +58,19 @@ answer it got at launch.
 herdr plugin install husniadil/herdr-swipe --yes
 ```
 
-Then swipe. To make sure it is alive, or after changing the code:
+Then swipe. Herdr starts the daemon at every session, and only ever one of it:
+the daemon holds an exclusive lock, so a late arrival exits rather than
+doubling every gesture.
+
+To restart it after changing the code, or to turn the gestures off:
 
 ```sh
 herdr plugin action invoke herdr-swipe.restart
+herdr plugin action invoke herdr-swipe.stop
 ```
+
+**Disabling or unlinking the plugin does not stop the daemon.** Herdr has no
+shutdown hook, so nothing tears it down; use the `stop` action.
 
 ## Tuning
 
@@ -87,6 +95,10 @@ your other agents, one of them has an open prompt.
 
 **Three-finger movement no longer scrolls.** Those events are swallowed so they
 cannot leak into a TUI as stray scrolling. Two-finger scrolling is unaffected.
+
+**`herdr plugin link` does not run `[[build]]`.** Only `install` does. A linked
+development checkout therefore has no virtualenv, so `run.sh` builds one on
+first launch instead of failing.
 
 ## How it works
 

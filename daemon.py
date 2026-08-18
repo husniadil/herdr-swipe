@@ -23,6 +23,7 @@ Two dependencies, both silent when missing:
 
 import ctypes
 import ctypes.util
+import fcntl
 import math
 import os
 import queue
@@ -52,6 +53,7 @@ MOMENTUM_SECONDS = 0.6
 
 TRACE = os.path.expanduser("~/.local/state/herdr-swipe/trace.log")
 TRACE_MAX_BYTES = 1_000_000
+PIDFILE = os.path.expanduser("~/.local/state/herdr-swipe/daemon.pid")
 
 TOUCHING = (Cocoa.NSTouchPhaseBegan | Cocoa.NSTouchPhaseMoved
             | Cocoa.NSTouchPhaseStationary)
@@ -72,6 +74,37 @@ _trace_file = open(TRACE, "a", buffering=1)   # line buffered, opened once
 
 def trace(msg):
     _trace_file.write(f"{time.strftime('%H:%M:%S')} [app] {msg}\n")
+
+
+def claim_singleton(timeout=5.0):
+    """Take the exclusive lock, or return None if another daemon holds it.
+
+    Two daemons mean every gesture fires twice, and a shell script cannot
+    prevent that: kill-then-launch is two steps, so two concurrent launches
+    interleave and both survive. The lock is held by the process that must be
+    unique, which is the only place the guarantee can actually be made.
+
+    The wait exists because a restart kills the previous daemon and starts the
+    next one immediately; the new one should outlast that overlap, not lose to
+    it. The handle is returned so the caller can keep it alive: closing it, or
+    letting it be collected, releases the lock.
+    """
+    handle = open(PIDFILE, "a+")
+    deadline = time.time() + timeout
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            if time.time() >= deadline:
+                handle.close()
+                return None
+            time.sleep(0.1)
+            continue
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"{os.getpid()}\n")
+        handle.flush()
+        return handle
 
 
 def accessibility_trusted():
@@ -225,6 +258,11 @@ def handle(proxy, etype, cg_event, refcon):
 
     return passthrough
 
+
+_lock = claim_singleton()
+if _lock is None:
+    trace(f"another daemon already holds {PIDFILE}; exiting")
+    raise SystemExit(0)
 
 _tap = Quartz.CGEventTapCreate(
     Quartz.kCGSessionEventTap,

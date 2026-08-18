@@ -21,3 +21,11 @@ id = "restart"
 title = "Restart gesture daemon"
 contexts = ["workspace"]
 command = ["scripts/run.sh"]
+
+# Herdr has no shutdown hook, so disabling or unlinking the plugin leaves the
+# daemon running. This is the way to actually turn the gestures off.
+[[actions]]
+id = "stop"
+title = "Stop gesture daemon"
+contexts = ["workspace"]
+command = ["scripts/stop.sh"]
