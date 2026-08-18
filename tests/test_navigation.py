@@ -123,6 +123,19 @@ class Attention(unittest.TestCase):
         self.addCleanup(herdr.close)
         self.assertEqual(navigation.attention(herdr.path), ("blocked", "w1:p1"))
 
+    def test_a_tap_moves_on_instead_of_staying_where_it_is(self):
+        # Focused on a blocked agent, with another one waiting. Starting the
+        # walk on the current pane would pick it again, and every tap after
+        # that would too: the second agent could never be reached.
+        snapshot = {"snapshot": dict(self.SNAPSHOT["snapshot"],
+                                     focused_pane_id="w1:p1")}
+        herdr = FakeHerdr({
+            "agent.list": self._agents(("w1:p1", "blocked"), ("w1:p3", "blocked")),
+            "session.snapshot": snapshot, "pane.focus": {},
+        })
+        self.addCleanup(herdr.close)
+        self.assertEqual(navigation.attention(herdr.path), ("blocked", "w1:p3"))
+
     def test_blocked_outranks_done(self):
         herdr = FakeHerdr({
             "agent.list": self._agents(("w1:pA", "done"), ("w1:p3", "blocked")),
