@@ -1,6 +1,6 @@
 id = "herdr-swipe"
 name = "Herdr Swipe"
-version = "0.1.0"
+version = "0.1.1"
 min_herdr_version = "0.8.0"
 description = "Trackpad gestures for Herdr: move between panes, tabs and spaces, and jump to the agent waiting on you"
 platforms = ["macos"]
