@@ -65,6 +65,25 @@ HOSTS = frozenset(
 )
 NS_GESTURE, NS_SCROLL = 29, 22
 
+# Every delta a scroll event carries, in the field width each is stored in.
+# Claimed scroll events are neutralised rather than dropped: AppKit clients
+# track a scroll gesture as a stream and stop the world until it ends --
+# iTerm2's swipe-between-tabs tracker pumps a nested event loop on the main
+# thread waiting for the next scroll event, up to 5s per silence. Dropping the
+# stream mid-gesture therefore beachballs the very terminal the gesture was
+# for. An event with its deltas zeroed still carries its phase, so trackers
+# close cleanly while nothing actually scrolls.
+_SCROLL_INT_FIELDS = (
+    Quartz.kCGScrollWheelEventDeltaAxis1,
+    Quartz.kCGScrollWheelEventDeltaAxis2,
+    Quartz.kCGScrollWheelEventPointDeltaAxis1,
+    Quartz.kCGScrollWheelEventPointDeltaAxis2,
+)
+_SCROLL_DOUBLE_FIELDS = (
+    Quartz.kCGScrollWheelEventFixedPtDeltaAxis1,
+    Quartz.kCGScrollWheelEventFixedPtDeltaAxis2,
+)
+
 # A gesture the worker cannot reach in this long has been overtaken by events.
 # Herdr blocking for a couple of seconds turns a burst of swipes into a queue
 # that drains afterwards, so focus jumps several times once it recovers, long
@@ -248,7 +267,16 @@ def handle(proxy, etype, cg_event, refcon):
             dispatch(f"{_session.fingers}-finger {direction} -> {verb}",
                      navigation.VERBS[verb], direction)
 
-    return None if swallow else cg_event
+    if not swallow:
+        return cg_event
+    if etype != NS_SCROLL:
+        return None
+    # See _SCROLL_INT_FIELDS: a claimed scroll stream must end, not vanish.
+    for field in _SCROLL_INT_FIELDS:
+        Quartz.CGEventSetIntegerValueField(cg_event, field, 0)
+    for field in _SCROLL_DOUBLE_FIELDS:
+        Quartz.CGEventSetDoubleValueField(cg_event, field, 0.0)
+    return cg_event
 
 
 # CI can prove the dependencies resolve and the module imports, but it cannot
